@@ -419,12 +419,15 @@ PWA_HTML = r"""<!DOCTYPE html>
     <!-- TAB 3: OMNIROUTE GATEWAY -->
     <div id="tab-omniroute" class="tab-content">
       <div class="stat-card" style="margin-bottom: 20px;">
-        <h3 style="color: var(--text-bright); margin-bottom: 8px;">🔀 OmniRoute AI Gateway Status</h3>
-        <p style="color: #8b949e; margin-bottom: 12px;">OmniRoute pools free-tier models and manages rate limits via automated fallback and token compression.</p>
-        <div style="display: flex; gap: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; flex-wrap: wrap;">
-          <div>Gateway Status: <span style="color: var(--success); font-weight: bold;">ACTIVE</span></div>
-          <div>Port: <span>20128</span></div>
-          <div>Routes Configured: <span>78 Auto/Free Routes</span></div>
+        <h3 style="color: var(--text-bright); margin-bottom: 8px;">🔀 Cloud OmniRoute AI Gateway</h3>
+        <p style="color: #8b949e; margin-bottom: 12px;">OmniRoute is deployed natively on Oracle Cloud (Port 20128) and proxied at <code>/omniroute/v1</code> for unlimited access across Web, CLI, and Mobile.</p>
+        <div style="display: flex; gap: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; flex-wrap: wrap; margin-bottom: 10px;">
+          <div>Gateway Status: <span style="color: var(--success); font-weight: bold;">ACTIVE (Cloud 24/7)</span></div>
+          <div>Public URL: <span style="color: var(--accent);">http://92.4.79.176/omniroute/v1</span></div>
+          <div>Internal Port: <span>20128</span></div>
+        </div>
+        <div style="background: rgba(88, 166, 255, 0.1); border: 1px solid rgba(88, 166, 255, 0.3); padding: 8px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; word-break: break-all;">
+          <strong>Cloud Master API Key:</strong> <code>sk-omnicloud-92479176-a1b2c3d4e5f6-unlimited</code>
         </div>
       </div>
 
@@ -480,7 +483,7 @@ PWA_HTML = r"""<!DOCTYPE html>
           <button style="background: none; border: none; color: #8b949e; font-size: 1.4rem; cursor: pointer;" onclick="closeSettingsModal()">×</button>
         </div>
         <p style="font-size: 0.85rem; color: #8b949e; margin-bottom: 16px;">
-          Hermes Agent routes all queries through the <strong>OmniRoute AI Gateway</strong> (Port <code>20128</code>) using Master Key <code>sk-cfdb375eb158eba9-a065cc-001dea1c</code>. You can optionally supply your own free Groq or Gemini API key which OmniRoute will use to stream frontier models at 500+ tokens/sec!
+          Hermes Agent routes all queries through the <strong>Cloud OmniRoute AI Gateway</strong> (Port <code>20128</code>) using Cloud Master Key <code>sk-omnicloud-92479176-a1b2c3d4e5f6-unlimited</code>. You can optionally supply your own free Groq or Gemini API key which Cloud OmniRoute will use to stream frontier models at 500+ tokens/sec!
         </p>
         <div style="margin-bottom: 14px;">
           <label style="font-size: 0.8rem; color: var(--text-bright); display: block; margin-bottom: 6px;">Groq API Key (Optional - Free LLaMA 3.3 70B at 500 t/s)</label>
@@ -634,7 +637,7 @@ PWA_HTML = r"""<!DOCTYPE html>
       const thinking = document.getElementById('thinking-msg');
       if (thinking) thinking.remove();
 
-      chatBox.innerHTML += `<div class="msg agent"><strong>☤ Hermes Agent <span style="font-size: 0.72rem; color: #58a6ff; font-weight: normal; margin-left: 6px;">[OmniRoute @ port 20128]</span>:</strong><br>${formatReply(reply)}</div>`;
+      chatBox.innerHTML += `<div class="msg agent"><strong>☤ Hermes Agent <span style="font-size: 0.72rem; color: #58a6ff; font-weight: normal; margin-left: 6px;">[Cloud OmniRoute @ 92.4.79.176]</span>:</strong><br>${formatReply(reply)}</div>`;
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
@@ -881,7 +884,7 @@ class HermesHandler(BaseHTTPRequestHandler):
     def generate_hermes_response(self, prompt: str, custom_headers: dict = None) -> str:
         """Route user prompt to OmniRoute Gateway on port 20128."""
         omniroute_url = os.environ.get("OMNIROUTE_URL", "http://127.0.0.1:20128/v1/chat/completions")
-        omni_key = os.environ.get("OMNIROUTE_KEY", "sk-cfdb375eb158eba9-a065cc-001dea1c")
+        omni_key = os.environ.get("OMNIROUTE_KEY", "sk-omnicloud-92479176-a1b2c3d4e5f6-unlimited")
         custom_headers = custom_headers or {}
 
         # 1. Forward request to OmniRoute gateway service

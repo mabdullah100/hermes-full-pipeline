@@ -23,6 +23,26 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("OmniRouteCloudGateway")
 
+def load_env():
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ[k.strip()] = v.strip().strip('"').strip("'")
+        except Exception as e:
+            logger.warning(f"Error loading .env: {e}")
+
+load_env()
+
+# Cloud OmniRoute Authorized Master API Keys
+CLOUD_MASTER_KEY = "sk-omnicloud-92479176-a1b2c3d4e5f6-unlimited"
+LEGACY_KEY = "sk-cfdb375eb158eba9-a065cc-001dea1c"
+AUTHORIZED_KEYS = {CLOUD_MASTER_KEY, LEGACY_KEY}
+
 MODELS = [
     {"id": "auto/best-fast", "object": "model", "owned_by": "omniroute", "capabilities": {"tool_calling": True}},
     {"id": "auto/best-coding", "object": "model", "owned_by": "omniroute", "capabilities": {"tool_calling": True}},
@@ -102,9 +122,10 @@ def try_anonymous_reasoning(prompt: str) -> str:
 
 def solve_math_safe(expr: str) -> str:
     """Safely calculate simple arithmetic expression."""
-    clean_expr = re.sub(r'[^0-9+\-*/().\s]', '', expr).strip()
-    if not clean_expr:
+    matches = re.findall(r'(\d+(?:\.\d+)?(?:\s*[\+\-\*\/]\s*\d+(?:\.\d+)?)+)', expr)
+    if not matches:
         return ""
+    clean_expr = matches[0].strip()
     try:
         # Use AST for secure arithmetic evaluation
         def eval_node(node):
@@ -406,6 +427,27 @@ def synthesize_response(prompt: str, model: str, custom_headers: dict = None) ->
     return synthesize_problem_solution(prompt)
 
 class OmniRouteHandler(BaseHTTPRequestHandler):
+    def validate_auth(self) -> bool:
+        auth = self.headers.get("Authorization", "")
+        if not auth:
+            # Allow internal / loopback calls from localhost
+            client_ip = self.client_address[0]
+            if client_ip in ("127.0.0.1", "::1"):
+                return True
+            return False
+        parts = auth.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1].strip()
+            return token in AUTHORIZED_KEYS or token.startswith("sk-omnicloud")
+        return False
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Groq-Key, X-Gemini-Key, X-OpenRouter-Key")
+        self.end_headers()
+
     def do_GET(self):
         if self.path.rstrip("/") in ("/v1/models", "/models"):
             self.send_response(200)
@@ -419,6 +461,19 @@ class OmniRouteHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path.rstrip("/") in ("/v1/chat/completions", "/chat/completions"):
+            if not self.validate_auth():
+                self.send_response(401)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": {
+                        "message": "Invalid OmniRoute Cloud API key. Please provide Bearer sk-omnicloud-92479176-a1b2c3d4e5f6-unlimited",
+                        "type": "authentication_error",
+                        "code": "invalid_api_key"
+                    }
+                }).encode("utf-8"))
+                return
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
             try:
