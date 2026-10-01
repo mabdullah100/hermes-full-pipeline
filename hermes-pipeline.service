@@ -1,0 +1,17 @@
+[Unit]
+Description=Hermes Autonomous Content & Intelligence Pipeline
+After=network.target
+
+[Service]
+Type=simple
+User=opc
+WorkingDirectory=/home/opc/hermes-pipeline
+ExecStart=/usr/bin/python3 /home/opc/hermes-pipeline/server.py 5050
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=append:/var/log/hermes-pipeline.log
+StandardError=append:/var/log/hermes-pipeline.log
+
+[Install]
+WantedBy=multi-user.target

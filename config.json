@@ -1,0 +1,80 @@
+{
+  "pipeline_name": "Hermes Content & Intelligence Pipeline",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "openrouter",
+    "model": "meta-llama/llama-3.3-70b-instruct:free",
+    "fallback_model": "google/gemini-2.0-flash-exp:free",
+    "temperature": 0.4,
+    "api_key_env": "OPENROUTER_API_KEY",
+    "base_url": "https://openrouter.ai/api/v1",
+    "note": "Can use OpenRouter free models, Google AI Studio key, Groq, or local Ollama (http://localhost:11434/v1)"
+  },
+  "sources": [
+    {
+      "name": "Hacker News Frontpage",
+      "type": "rss",
+      "url": "https://news.ycombinator.com/rss",
+      "category": "Tech & AI"
+    },
+    {
+      "name": "ArXiv AI Research",
+      "type": "rss",
+      "url": "https://rss.arxiv.org/rss/cs.AI",
+      "category": "Research"
+    },
+    {
+      "name": "TechCrunch AI",
+      "type": "rss",
+      "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+      "category": "Industry News"
+    }
+  ],
+  "filter": {
+    "materiality_threshold": 6,
+    "target_topics": [
+      "AI",
+      "LLM",
+      "agent",
+      "model",
+      "intelligence",
+      "machine learning",
+      "neural",
+      "robotics",
+      "developer",
+      "cloud",
+      "open-source"
+    ],
+    "negative_keywords": [
+      "casino",
+      "gambling",
+      "meme coin",
+      "poker"
+    ]
+  },
+  "writing": {
+    "formats": [
+      "executive_brief",
+      "key_insights",
+      "social_post",
+      "action_items"
+    ]
+  },
+  "review": {
+    "auto_approve": false,
+    "queue_directory": "queue/review"
+  },
+  "publishing": {
+    "output_directory": "output/published",
+    "generate_daily_digest": true,
+    "telegram": {
+      "enabled": false,
+      "bot_token_env": "TELEGRAM_BOT_TOKEN",
+      "chat_id_env": "TELEGRAM_CHAT_ID"
+    },
+    "discord": {
+      "enabled": false,
+      "webhook_url_env": "DISCORD_WEBHOOK_URL"
+    }
+  }
+}
