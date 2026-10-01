@@ -1,0 +1,16 @@
+[Unit]
+Description=OmniRoute Cloud AI Gateway Service
+After=network.target
+
+[Service]
+Type=simple
+User=opc
+WorkingDirectory=/home/opc/hermes-pipeline
+ExecStart=/usr/bin/python3 /home/opc/hermes-pipeline/omniroute_service.py 20128
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
