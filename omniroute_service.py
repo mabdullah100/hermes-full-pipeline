@@ -72,7 +72,7 @@ def synthesize_response(prompt: str, model: str) -> str:
             f"https://text.pollinations.ai/{encoded}",
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HermesAgent/1.0"}
         )
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             answer = resp.read().decode("utf-8").strip()
             if answer and len(answer) > 10:
                 return answer

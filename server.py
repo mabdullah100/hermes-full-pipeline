@@ -837,7 +837,7 @@ class HermesHandler(BaseHTTPRequestHandler):
                 data=req_data,
                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {omni_key}"}
             )
-            with urllib.request.urlopen(req, timeout=8) as resp:
+            with urllib.request.urlopen(req, timeout=35) as resp:
                 res = json.loads(resp.read().decode("utf-8"))
                 return res["choices"][0]["message"]["content"]
         except Exception:
@@ -893,7 +893,7 @@ class HermesHandler(BaseHTTPRequestHandler):
                     f"https://text.pollinations.ai/{encoded}",
                     headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HermesAgent/1.0"}
                 )
-                with urllib.request.urlopen(req, timeout=12) as resp:
+                with urllib.request.urlopen(req, timeout=30) as resp:
                     answer = resp.read().decode("utf-8").strip()
                     if answer and len(answer) > 10:
                         return answer
