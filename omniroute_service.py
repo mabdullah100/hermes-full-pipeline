@@ -23,7 +23,7 @@ MODELS = [
 
 def synthesize_response(prompt: str, model: str) -> str:
     p = prompt.lower()
-    if any(k in p for k in ["what can", "purpose", "explain", "benefit", "who are you"]):
+    if any(k in p for k in ["what is", "what can", "hermes", "purpose", "explain", "benefit", "who are you"]):
         return (
             "☤ **Hermes Agent (Nous Research)**:\n\n"
             "I am an autonomous AI agent built for end-to-end task execution, tool use, and long-running workflows.\n\n"
