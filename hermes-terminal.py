@@ -7,6 +7,9 @@ import sys
 import json
 import urllib.request
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 CLOUD_OMNI_URL = "http://92.4.79.176/omniroute/v1/chat/completions"
 CLOUD_MASTER_KEY = "sk-omnicloud-92479176-a1b2c3d4e5f6-unlimited"
 
