@@ -49,8 +49,7 @@ PWA_HTML = r"""<!DOCTYPE html>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <script src="https://js.puter.com/v2/"></script>
+  <!-- OmniRoute Universal Gateway Integration -->
   <style>
     :root {
       --bg: #090d13;
@@ -481,7 +480,7 @@ PWA_HTML = r"""<!DOCTYPE html>
           <button style="background: none; border: none; color: #8b949e; font-size: 1.4rem; cursor: pointer;" onclick="closeSettingsModal()">×</button>
         </div>
         <p style="font-size: 0.85rem; color: #8b949e; margin-bottom: 16px;">
-          Hermes uses Puter.js GPT-4o-mini & OmniRoute by default (100% free, no key needed). You can also add your own free Groq or Gemini API key for instant 500 tokens/sec speed.
+          Hermes Agent routes all queries through the <strong>OmniRoute AI Gateway</strong> (Port <code>20128</code>) using Master Key <code>sk-cfdb375eb158eba9-a065cc-001dea1c</code>. You can optionally supply your own free Groq or Gemini API key which OmniRoute will use to stream frontier models at 500+ tokens/sec!
         </p>
         <div style="margin-bottom: 14px;">
           <label style="font-size: 0.8rem; color: var(--text-bright); display: block; margin-bottom: 6px;">Groq API Key (Optional - Free LLaMA 3.3 70B at 500 t/s)</label>
@@ -613,88 +612,29 @@ PWA_HTML = r"""<!DOCTYPE html>
       chatBox.scrollTop = chatBox.scrollHeight;
 
       let reply = '';
-      let answered = false;
+      const groqKey = localStorage.getItem('hermes_groq_key') || '';
+      const geminiKey = localStorage.getItem('hermes_gemini_key') || '';
 
-      const groqKey = localStorage.getItem('hermes_groq_key');
-      const geminiKey = localStorage.getItem('hermes_gemini_key');
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (groqKey) headers['X-Groq-Key'] = groqKey;
+        if (geminiKey) headers['X-Gemini-Key'] = geminiKey;
 
-      // 1. Try Groq if key configured
-      if (!answered && groqKey) {
-        try {
-          const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
-              messages: [
-                { role: 'system', content: 'You are Hermes Agent, an expert AI created by Nous Research. Provide clear, direct, and technically thorough solutions.' },
-                { role: 'user', content: text }
-              ]
-            })
-          });
-          const res = await resp.json();
-          if (res.choices && res.choices[0]) {
-            reply = res.choices[0].message.content;
-            answered = true;
-          }
-        } catch(e) { console.warn('Groq error:', e); }
-      }
-
-      // 2. Try Gemini if key configured
-      if (!answered && geminiKey) {
-        try {
-          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: text }] }]
-            })
-          });
-          const res = await resp.json();
-          if (res.candidates && res.candidates[0]) {
-            reply = res.candidates[0].content.parts[0].text;
-            answered = true;
-          }
-        } catch(e) { console.warn('Gemini error:', e); }
-      }
-
-      // 3. Try Puter.js in browser (Free GPT-4o-mini, no key required)
-      if (!answered && window.puter && window.puter.ai) {
-        try {
-          const res = await puter.ai.chat(text, {
-            model: 'gpt-4o-mini',
-            system: 'You are Hermes Agent, an autonomous AI assistant built by Nous Research. Provide detailed, well-formatted answers with markdown, lists, and code blocks.'
-          });
-          if (res && res.message && res.message.content) {
-            reply = res.message.content;
-            answered = true;
-          } else if (typeof res === 'string' && res.trim()) {
-            reply = res;
-            answered = true;
-          }
-        } catch(e) { console.warn('Puter.js error:', e); }
-      }
-
-      // 4. Server-side Oracle Cloud fallback (OmniRoute + Live LLM engine)
-      if (!answered) {
-        try {
-          const res = await fetch('/hermes/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text })
-          });
-          const data = await res.json();
-          reply = data.reply;
-          answered = true;
-        } catch(e) {
-          reply = `Error communicating with Hermes: ${e.message}`;
-        }
+        const res = await fetch('/hermes/api/chat', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        reply = data.reply || 'No response returned from OmniRoute.';
+      } catch(e) {
+        reply = `Error communicating with OmniRoute Gateway: ${e.message}`;
       }
 
       const thinking = document.getElementById('thinking-msg');
       if (thinking) thinking.remove();
 
-      chatBox.innerHTML += `<div class="msg agent"><strong>☤ Hermes Agent:</strong><br>${formatReply(reply)}</div>`;
+      chatBox.innerHTML += `<div class="msg agent"><strong>☤ Hermes Agent <span style="font-size: 0.72rem; color: #58a6ff; font-weight: normal; margin-left: 6px;">[OmniRoute @ port 20128]</span>:</strong><br>${formatReply(reply)}</div>`;
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
@@ -898,7 +838,7 @@ class HermesHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/")
 
-        # API: Chat with Hermes
+        # API: Chat with Hermes (Powered by OmniRoute)
         if path.endswith("/api/chat") or path.endswith("/chat"):
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
@@ -908,7 +848,13 @@ class HermesHandler(BaseHTTPRequestHandler):
             except Exception:
                 user_msg = ""
 
-            reply = self.generate_hermes_response(user_msg)
+            custom_headers = {
+                "X-Groq-Key": self.headers.get("X-Groq-Key", ""),
+                "X-Gemini-Key": self.headers.get("X-Gemini-Key", ""),
+                "X-OpenRouter-Key": self.headers.get("X-OpenRouter-Key", "")
+            }
+
+            reply = self.generate_hermes_response(user_msg, custom_headers)
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -932,92 +878,52 @@ class HermesHandler(BaseHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
-    def generate_hermes_response(self, prompt: str) -> str:
-        """Route user prompt to OmniRoute or local Hermes synthesis."""
-        # Try local OmniRoute gateway first
+    def generate_hermes_response(self, prompt: str, custom_headers: dict = None) -> str:
+        """Route user prompt to OmniRoute Gateway on port 20128."""
         omniroute_url = os.environ.get("OMNIROUTE_URL", "http://127.0.0.1:20128/v1/chat/completions")
         omni_key = os.environ.get("OMNIROUTE_KEY", "sk-cfdb375eb158eba9-a065cc-001dea1c")
+        custom_headers = custom_headers or {}
+
+        # 1. Forward request to OmniRoute gateway service
         try:
             req_data = json.dumps({
                 "model": "auto/best-fast",
                 "messages": [
-                    {"role": "system", "content": "You are Hermes Agent, an autonomous AI assistant built by Nous Research, deployed on Oracle Cloud. Provide sharp, technically accurate, direct responses."},
+                    {"role": "system", "content": "You are Hermes Agent, an autonomous AI assistant built by Nous Research, connected via OmniRoute Gateway. Provide sharp, technically accurate, direct responses."},
                     {"role": "user", "content": prompt}
                 ]
             }).encode("utf-8")
+            req_headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {omni_key}"
+            }
+            for k, v in custom_headers.items():
+                if v:
+                    req_headers[k] = v
+
             req = urllib.request.Request(
                 omniroute_url,
                 data=req_data,
-                headers={"Content-Type": "application/json", "Authorization": f"Bearer {omni_key}"}
+                headers=req_headers
             )
             with urllib.request.urlopen(req, timeout=35) as resp:
                 res = json.loads(resp.read().decode("utf-8"))
                 return res["choices"][0]["message"]["content"]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"OmniRoute HTTP call failed: {e}")
 
-        # Intelligent Autonomous Agent Fallback
-        p_lower = prompt.lower()
-        if "what can" in p_lower or "purpose" in p_lower or "explain" in p_lower or "benefit" in p_lower:
-            return (
-                "☤ **What is Hermes Agent & Its Purpose:**\n\n"
-                "**Hermes Agent** is an autonomous AI agent created by **Nous Research**. Unlike standard conversational chatbots that simply generate text, Hermes is built on an **Agentic Action-Perception Loop** designed to execute real work:\n\n"
-                "1. **Autonomous Tool Use & Execution**: Hermes can execute shell commands, run Python scripts, inspect logs, and manage cloud services without human intervention.\n"
-                "2. **Continuous Intelligence Gathering**: Powers end-to-end multi-stage pipelines (scraping, deduplication, AI evaluation, technical synthesis, review queues, and multi-channel publishing).\n"
-                "3. **Persistent Procedural Memory & Skills**: Hermes stores and discovers specialized skills (`SKILL.md` workflows), dynamically adopting new capabilities as tasks evolve.\n"
-                "4. **Self-Healing & Task Completion**: If a subtask fails, Hermes inspects the error trace, adapts its strategy, and iterates until the goal is achieved.\n"
-                "5. **Zero-Cost Model Routing**: Integrates with OmniRoute to leverage pooled free-tier models (Gemini, Groq, OpenRouter) with automatic fallback and rate-limit mitigation."
-            )
-        elif "pipeline" in p_lower or "news" in p_lower or "digest" in p_lower:
-            return (
-                "☤ **Autonomous Content Intelligence Status**:\n\n"
-                "- **Ingested Items**: Over 660 unique technical sources (ArXiv, HackerNews, TechCrunch, VentureBeat, GitHub Trending).\n"
-                "- **Curated Deliverables**: 637 markdown intelligence briefs with executive summaries, technical impact scores, and actionable takeaways.\n"
-                "- **Automated Schedule**: Runs every 6 hours via system cron.\n\n"
-                "Click on the **📰 Content Pipeline** tab above to explore stories or click **⚡ Trigger Full Pipeline Run** to launch an immediate crawl."
-            )
-        elif "oracle" in p_lower or "resource" in p_lower or "free" in p_lower or "status" in p_lower:
-            return (
-                "☁️ **Oracle Cloud Live Architecture & Free Tier Audit**:\n\n"
-                "1. **Active VM (`anypass-prod`)**:\n"
-                "   - **Shape**: `VM.Standard.E2.1.Micro` (AMD EPYC 7551, 2 vCPUs)\n"
-                "   - **Physical RAM**: 498 MiB (~150 MiB free)\n"
-                "   - **Swap Memory**: 4.5 GiB NVMe Swap configured (~3.2 GiB free)\n"
-                "   - **Disk**: 46.6 GB root volume (17 GB free)\n"
-                "   - **Region**: `ap-mumbai-1` (Public IP: `92.4.79.176`)\n\n"
-                "2. **Remaining Always Free Headroom on Oracle Cloud**:\n"
-                "   - **Ampere A1 ARM**: Up to **4 OCPUs and 24 GB of RAM** free per month!\n"
-                "   - **Storage**: Up to **200 GB total** Block Volume storage.\n"
-                "   - **Bandwidth**: **10 TB free data egress** per month."
-            )
-        elif "omniroute" in p_lower or "model" in p_lower:
-            return (
-                "🔀 **OmniRoute AI Gateway Overview**:\n\n"
-                "OmniRoute is an intelligent AI proxy that pools free-tier API keys and models across providers (Groq, Gemini, OpenRouter, DeepSeek, AI Horde).\n"
-                "- **Port**: `20128`\n"
-                "- **Configured Routes**: 78 auto/free routes (`auto/best-fast`, `auto/best-coding`, `auto/best-reasoning`).\n"
-                "- **Rate Limit Protection**: Automatically rotates keys and falls back when limits are hit.\n\n"
-                "You can connect OmniRoute directly to Oracle Cloud using the provided SSH reverse tunnel command or run the lightweight OmniRoute forwarder."
-            )
-        else:
-            try:
-                encoded = urllib.parse.quote(prompt[:500])
-                req = urllib.request.Request(
-                    f"https://text.pollinations.ai/{encoded}",
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HermesAgent/1.0"}
-                )
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    answer = resp.read().decode("utf-8").strip()
-                    if answer and len(answer) > 10:
-                        return answer
-            except Exception as e:
-                logger.warning(f"Live LLM query failed in server.py: {e}")
+        # 2. Local fallback using omniroute_service multi-engine synthesis
+        try:
+            import omniroute_service
+            return omniroute_service.synthesize_response(prompt, "auto/best-fast", custom_headers)
+        except Exception as e:
+            logger.error(f"Fallback synthesis error: {e}")
 
-            return (
-                f"☤ **Hermes Agent Operational**:\n\n"
-                f"Instruction received: *\"{prompt}\"*\n\n"
-                "I am running as a persistent cloud agent on Oracle Cloud VM `anypass-prod`. I am capable of executing system tasks, monitoring the 6-stage content intelligence pipeline, querying OmniRoute models, and serving web & mobile interfaces."
-            )
+        return (
+            f"☤ **Hermes Agent Operational**:\n\n"
+            f"Instruction received: *\"{prompt}\"*\n\n"
+            "I am running as a persistent cloud agent on Oracle Cloud VM `anypass-prod` connected via OmniRoute Gateway (port 20128)."
+        )
 
 
 def run_server(port: int = 5050):
