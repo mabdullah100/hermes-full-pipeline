@@ -345,9 +345,12 @@ PWA_HTML = r"""<!DOCTYPE html>
         <div style="font-size: 0.75rem; color: #8b949e;">Autonomous AI & Intelligence Hub</div>
       </div>
     </div>
-    <div class="status-pill">
-      <div class="pulse-dot"></div>
-      <span>ORACLE CLOUD LIVE</span>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px; border-radius: 14px;" onclick="openSettingsModal()">⚙️ AI Model</button>
+      <div class="status-pill">
+        <div class="pulse-dot"></div>
+        <span>ORACLE CLOUD LIVE</span>
+      </div>
     </div>
   </header>
 
@@ -468,6 +471,32 @@ PWA_HTML = r"""<!DOCTYPE html>
           <li><strong>Outbound Network Transfer:</strong> <strong>10 TB</strong> free data egress every month.</li>
           <li><strong>Autonomous Databases:</strong> 2 Free Oracle APEX / Autonomous OLTP databases (20 GB each).</li>
         </ul>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; padding: 20px;">
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; max-width: 480px; width: 100%; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="color: var(--text-bright);">⚙️ AI Engine Settings</h3>
+          <button style="background: none; border: none; color: #8b949e; font-size: 1.4rem; cursor: pointer;" onclick="closeSettingsModal()">×</button>
+        </div>
+        <p style="font-size: 0.85rem; color: #8b949e; margin-bottom: 16px;">
+          Hermes uses Puter.js GPT-4o-mini & OmniRoute by default (100% free, no key needed). You can also add your own free Groq or Gemini API key for instant 500 tokens/sec speed.
+        </p>
+        <div style="margin-bottom: 14px;">
+          <label style="font-size: 0.8rem; color: var(--text-bright); display: block; margin-bottom: 6px;">Groq API Key (Optional - Free LLaMA 3.3 70B at 500 t/s)</label>
+          <input type="password" id="groq-key-input" placeholder="gsk_..." style="width: 100%; background: #090d13; border: 1px solid var(--border); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: monospace;">
+          <div style="font-size: 0.72rem; margin-top: 4px;"><a href="https://console.groq.com/keys" target="_blank" style="color: var(--accent);">Get free Groq key (instant, no card) →</a></div>
+        </div>
+        <div style="margin-bottom: 20px;">
+          <label style="font-size: 0.8rem; color: var(--text-bright); display: block; margin-bottom: 6px;">Google Gemini API Key (Optional - Free 1M context)</label>
+          <input type="password" id="gemini-key-input" placeholder="AIzaSy..." style="width: 100%; background: #090d13; border: 1px solid var(--border); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: monospace;">
+          <div style="font-size: 0.72rem; margin-top: 4px;"><a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--accent);">Get free Gemini key (instant, no card) →</a></div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-secondary" onclick="closeSettingsModal()">Cancel</button>
+          <button class="btn" onclick="saveSettings()">Save & Use</button>
+        </div>
       </div>
     </div>
   </main>
@@ -553,6 +582,23 @@ PWA_HTML = r"""<!DOCTYPE html>
       });
     }
 
+    function openSettingsModal() {
+      document.getElementById('groq-key-input').value = localStorage.getItem('hermes_groq_key') || '';
+      document.getElementById('gemini-key-input').value = localStorage.getItem('hermes_gemini_key') || '';
+      document.getElementById('settings-modal').style.display = 'flex';
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settings-modal').style.display = 'none';
+    }
+
+    function saveSettings() {
+      localStorage.setItem('hermes_groq_key', document.getElementById('groq-key-input').value.trim());
+      localStorage.setItem('hermes_gemini_key', document.getElementById('gemini-key-input').value.trim());
+      closeSettingsModal();
+      alert('AI Settings saved successfully!');
+    }
+
     async function sendChat() {
       const input = document.getElementById('chat-input');
       const text = input.value.trim();
@@ -566,23 +612,90 @@ PWA_HTML = r"""<!DOCTYPE html>
       chatBox.innerHTML += `<div class="msg agent" id="thinking-msg"><em>☤ Hermes is reasoning...</em></div>`;
       chatBox.scrollTop = chatBox.scrollHeight;
 
-      try {
-        const res = await fetch('/hermes/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text })
-        });
-        const data = await res.json();
-        const thinking = document.getElementById('thinking-msg');
-        if (thinking) thinking.remove();
+      let reply = '';
+      let answered = false;
 
-        chatBox.innerHTML += `<div class="msg agent"><strong>☤ Hermes Agent:</strong><br>${formatReply(data.reply)}</div>`;
-        chatBox.scrollTop = chatBox.scrollHeight;
-      } catch(e) {
-        const thinking = document.getElementById('thinking-msg');
-        if (thinking) thinking.remove();
-        chatBox.innerHTML += `<div class="msg agent" style="color: var(--danger)">Error communicating with Hermes: ${e.message}</div>`;
+      const groqKey = localStorage.getItem('hermes_groq_key');
+      const geminiKey = localStorage.getItem('hermes_gemini_key');
+
+      // 1. Try Groq if key configured
+      if (!answered && groqKey) {
+        try {
+          const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [
+                { role: 'system', content: 'You are Hermes Agent, an expert AI created by Nous Research. Provide clear, direct, and technically thorough solutions.' },
+                { role: 'user', content: text }
+              ]
+            })
+          });
+          const res = await resp.json();
+          if (res.choices && res.choices[0]) {
+            reply = res.choices[0].message.content;
+            answered = true;
+          }
+        } catch(e) { console.warn('Groq error:', e); }
       }
+
+      // 2. Try Gemini if key configured
+      if (!answered && geminiKey) {
+        try {
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: text }] }]
+            })
+          });
+          const res = await resp.json();
+          if (res.candidates && res.candidates[0]) {
+            reply = res.candidates[0].content.parts[0].text;
+            answered = true;
+          }
+        } catch(e) { console.warn('Gemini error:', e); }
+      }
+
+      // 3. Try Puter.js in browser (Free GPT-4o-mini, no key required)
+      if (!answered && window.puter && window.puter.ai) {
+        try {
+          const res = await puter.ai.chat(text, {
+            model: 'gpt-4o-mini',
+            system: 'You are Hermes Agent, an autonomous AI assistant built by Nous Research. Provide detailed, well-formatted answers with markdown, lists, and code blocks.'
+          });
+          if (res && res.message && res.message.content) {
+            reply = res.message.content;
+            answered = true;
+          } else if (typeof res === 'string' && res.trim()) {
+            reply = res;
+            answered = true;
+          }
+        } catch(e) { console.warn('Puter.js error:', e); }
+      }
+
+      // 4. Server-side Oracle Cloud fallback (OmniRoute + Live LLM engine)
+      if (!answered) {
+        try {
+          const res = await fetch('/hermes/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text })
+          });
+          const data = await res.json();
+          reply = data.reply;
+          answered = true;
+        } catch(e) {
+          reply = `Error communicating with Hermes: ${e.message}`;
+        }
+      }
+
+      const thinking = document.getElementById('thinking-msg');
+      if (thinking) thinking.remove();
+
+      chatBox.innerHTML += `<div class="msg agent"><strong>☤ Hermes Agent:</strong><br>${formatReply(reply)}</div>`;
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     loadPipelineStats();
