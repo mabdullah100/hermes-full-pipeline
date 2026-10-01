@@ -50,6 +50,7 @@ PWA_HTML = r"""<!DOCTYPE html>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://js.puter.com/v2/"></script>
   <style>
     :root {
       --bg: #090d13;
@@ -886,6 +887,19 @@ class HermesHandler(BaseHTTPRequestHandler):
                 "You can connect OmniRoute directly to Oracle Cloud using the provided SSH reverse tunnel command or run the lightweight OmniRoute forwarder."
             )
         else:
+            try:
+                encoded = urllib.parse.quote(prompt[:500])
+                req = urllib.request.Request(
+                    f"https://text.pollinations.ai/{encoded}",
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HermesAgent/1.0"}
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    answer = resp.read().decode("utf-8").strip()
+                    if answer and len(answer) > 10:
+                        return answer
+            except Exception as e:
+                logger.warning(f"Live LLM query failed in server.py: {e}")
+
             return (
                 f"☤ **Hermes Agent Operational**:\n\n"
                 f"Instruction received: *\"{prompt}\"*\n\n"

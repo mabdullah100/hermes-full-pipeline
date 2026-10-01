@@ -7,6 +7,8 @@ Consumes under 15 MB RAM (pure Python standard library).
 import sys
 import json
 import logging
+import urllib.request
+import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -63,28 +65,25 @@ def synthesize_response(prompt: str, model: str) -> str:
             "• `auto/coding:free`: Fallback free-tier models\n"
             "All requests feature automated rate-limit fallbacks and key pooling."
         )
-    elif any(k in p for k in ["code", "script", "python", "function"]):
-        return (
-            f"💻 **Hermes Code Generation ({model})**:\n\n"
-            "Here is a recommended automation structure for your task:\n\n"
-            "```python\n"
-            "import os, sys, requests\n\n"
-            "def automate_task():\n"
-            "    # Connected to Hermes Cloud API\n"
-            "    print('Executing autonomous workflow on Oracle Cloud...')\n"
-            "    # Add your task logic here\n"
-            "    return True\n\n"
-            "if __name__ == '__main__':\n"
-            "    automate_task()\n"
-            "```\n\n"
-            "Tell me the exact requirements and I will write the full implementation."
+    # 5. Live Autonomous Reasoning & Problem Solving via Real LLM Engine
+    try:
+        encoded = urllib.parse.quote(prompt[:500])
+        req = urllib.request.Request(
+            f"https://text.pollinations.ai/{encoded}",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HermesAgent/1.0"}
         )
-    else:
-        return (
-            f"☤ **Hermes Agent Response** (via `{model}`):\n\n"
-            f"I have received and processed your query: *\"{prompt}\"*.\n\n"
-            "I am running on your Oracle Cloud server and ready to execute system tasks, query live intelligence feeds, or generate code. What is your next instruction?"
-        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            answer = resp.read().decode("utf-8").strip()
+            if answer and len(answer) > 10:
+                return answer
+    except Exception as e:
+        logger.warning(f"Live LLM query failed: {e}")
+
+    return (
+        f"☤ **Hermes Agent Response**:\n\n"
+        f"Processed instruction: *\"{prompt}\"*.\n\n"
+        "I am ready to perform system operations, query live intelligence feeds, or generate code. What is your next instruction?"
+    )
 
 class OmniRouteHandler(BaseHTTPRequestHandler):
     def do_GET(self):
