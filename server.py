@@ -472,6 +472,18 @@ PWA_HTML = r"""<!DOCTYPE html>
   </main>
 
   <script>
+    function formatReply(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background: rgba(110,118,129,0.25); padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>')
+        .replace(/\n/g, '<br>');
+    }
+
     function setChatPrompt(p) {
       document.getElementById('chat-input').value = p;
       sendChat();
@@ -488,7 +500,7 @@ PWA_HTML = r"""<!DOCTYPE html>
 
     async function loadSystemResources() {
       try {
-        const res = await fetch('api/resources');
+        const res = await fetch('/hermes/api/resources');
         const data = await res.json();
         if (data.ram) document.getElementById('r-ram').innerText = data.ram;
         if (data.swap) document.getElementById('r-swap').innerText = data.swap;
@@ -499,7 +511,7 @@ PWA_HTML = r"""<!DOCTYPE html>
 
     async function loadPipelineStats() {
       try {
-        const res = await fetch('api/stats');
+        const res = await fetch('/hermes/api/stats');
         const data = await res.json();
         document.getElementById('p-seen').innerText = data.seen;
         document.getElementById('p-pending').innerText = data.pending;
@@ -509,7 +521,7 @@ PWA_HTML = r"""<!DOCTYPE html>
 
     async function loadPipelineFeed() {
       try {
-        const res = await fetch('api/feed');
+        const res = await fetch('/hermes/api/feed');
         const items = await res.json();
         const container = document.getElementById('pipeline-feed');
         if (!items || items.length === 0) {
@@ -532,7 +544,7 @@ PWA_HTML = r"""<!DOCTYPE html>
 
     async function runPipelineNow() {
       alert("Pipeline run launched on Oracle Cloud server!");
-      fetch('api/run', { method: 'POST' }).then(() => {
+      fetch('/hermes/api/run', { method: 'POST' }).then(() => {
         setTimeout(() => {
           loadPipelineStats();
           loadPipelineFeed();
@@ -546,7 +558,7 @@ PWA_HTML = r"""<!DOCTYPE html>
       if (!text) return;
 
       const chatBox = document.getElementById('chat-box');
-      chatBox.innerHTML += `<div class="msg user"><strong>You:</strong><br>${text}</div>`;
+      chatBox.innerHTML += `<div class="msg user"><strong>You:</strong><br>${text.replace(/</g, '&lt;')}</div>`;
       input.value = '';
       chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -554,7 +566,7 @@ PWA_HTML = r"""<!DOCTYPE html>
       chatBox.scrollTop = chatBox.scrollHeight;
 
       try {
-        const res = await fetch('api/chat', {
+        const res = await fetch('/hermes/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: text })
@@ -563,7 +575,7 @@ PWA_HTML = r"""<!DOCTYPE html>
         const thinking = document.getElementById('thinking-msg');
         if (thinking) thinking.remove();
 
-        chatBox.innerHTML += `<div class="msg agent"><strong>☤ Hermes Agent:</strong><br>${data.reply.replace(/\\n/g, '<br>')}</div>`;
+        chatBox.innerHTML += `<div class="msg agent"><strong>☤ Hermes Agent:</strong><br>${formatReply(data.reply)}</div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
       } catch(e) {
         const thinking = document.getElementById('thinking-msg');
@@ -718,7 +730,54 @@ class HermesHandler(BaseHTTPRequestHandler):
             }).encode("utf-8"))
             return
 
+        # API: Chat with Hermes via GET (browser visits or query params)
+        if path.endswith("/api/chat") or path.endswith("/chat"):
+            query = urllib.parse.parse_qs(parsed.query)
+            user_msg = query.get("message", [""])[0] or query.get("q", [""])[0]
+            if user_msg:
+                reply = self.generate_hermes_response(user_msg)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"reply": reply, "message": user_msg, "status": "success"}).encode("utf-8"))
+                return
+            else:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                redirect_html = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="refresh" content="1; url=/hermes/">
+    <title>Redirecting to Hermes Agent Studio...</title>
+    <style>
+        body { background: #090d13; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+        .card { background: #131923; padding: 35px 25px; border-radius: 12px; border: 1px solid #232d3d; max-width: 480px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+        .btn { display: inline-block; background: #58a6ff; color: #0d1117; font-weight: 700; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 style="color: #58a6ff; margin-bottom: 12px;">☤ Hermes Agent API</h2>
+        <p style="color: #8b949e; line-height: 1.6;">You opened the chat API directly in your browser. Redirecting you to the interactive <strong>Hermes Agent Studio</strong>...</p>
+        <a href="/hermes/" class="btn">Open Hermes Studio Now</a>
+    </div>
+</body>
+</html>"""
+                self.wfile.write(redirect_html.encode("utf-8"))
+                return
+
         self.send_response(404)
+        self.end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
 
     def do_POST(self):
@@ -726,7 +785,7 @@ class HermesHandler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/")
 
         # API: Chat with Hermes
-        if path.endswith("/api/chat"):
+        if path.endswith("/api/chat") or path.endswith("/chat"):
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
             try:
@@ -738,7 +797,7 @@ class HermesHandler(BaseHTTPRequestHandler):
             reply = self.generate_hermes_response(user_msg)
 
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps({"reply": reply}).encode("utf-8"))
